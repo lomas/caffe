@@ -27,7 +27,19 @@ template <typename Dtype>
 Dtype SGDSolver<Dtype>::GetLearningRate() {
   Dtype rate;
   const string& lr_policy = this->param_.lr_policy();
-  if (lr_policy == "fixed") {
+  int warmup_iter = this->param_.warmup_iter();
+  if(warmup_iter > 0 && this->iter_ < warmup_iter)
+  {
+    rate = (Dtype(this->iter_) / (float)warmup_iter) * this->param_.base_lr();
+    return rate;
+  }
+  if (lr_policy == "cosine") {
+    Dtype base_lr = Dtype(this->param_.base_lr());
+    Dtype max_iter = Dtype(this->param_.max_iter());
+    Dtype iter = this->iter_;
+    rate = 0.5 * (1 + cos(iter * 3.1415926 / max_iter)) * base_lr;
+  } 
+  else if (lr_policy == "fixed") {
     rate = this->param_.base_lr();
   } else if (lr_policy == "step") {
     CHECK_GT(this->param_.stepsize(), 0);

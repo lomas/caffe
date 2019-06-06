@@ -1,0 +1,13 @@
+%YAML:1.0
+num_classes:2
+model: "/home/codes/caffe/inference/models/pvanet.prototxt"
+weight: "/home/codes/caffe/inference/models/pvanet.caffemodel"
+mean:
+   - 1.029801e02
+   - 1.159465e02
+   - 1.227717e02
+scale: 32
+size_min: 224
+size_max: 224
+score_nms: 0.4
+score_obj: 0.4

@@ -38,7 +38,7 @@ void AccuracyLayer<Dtype>::Reshape(
   if (top.size() > 1) {
     // Per-class accuracy is a vector; 1 axes.
     vector<int> top_shape_per_class(1);
-    top_shape_per_class[0] = bottom[0]->shape(label_axis_);
+    top_shape_per_class[0] = bottom[0]->shape(label_axis_) * 3; //recalling, hit, total
     top[1]->Reshape(top_shape_per_class);
     nums_buffer_.Reshape(top_shape_per_class);
   }
@@ -79,7 +79,10 @@ void AccuracyLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       // check if there are less than top_k_ predictions
       if (num_better_predictions < top_k_) {
         ++accuracy;
-        if (top.size() > 1) ++top[1]->mutable_cpu_data()[label_value];
+        if (top.size() > 1) 
+        { 
+          ++top[1]->mutable_cpu_data()[label_value * 3 + 0];
+        }
       }
       ++count;
     }
@@ -89,9 +92,19 @@ void AccuracyLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   top[0]->mutable_cpu_data()[0] = (count == 0) ? 0 : (accuracy / count);
   if (top.size() > 1) {
     for (int i = 0; i < top[1]->count(); ++i) {
+      /*
       top[1]->mutable_cpu_data()[i] =
           nums_buffer_.cpu_data()[i] == 0 ? 0
           : top[1]->cpu_data()[i] / nums_buffer_.cpu_data()[i];
+          */
+
+      top[1]->mutable_cpu_data()[i * 3 + 1] =  top[1]->mutable_cpu_data()[i * 3]; //hit number
+      top[1]->mutable_cpu_data()[i * 3 + 2] =  nums_buffer_.cpu_data()[i]; //total
+
+      top[1]->mutable_cpu_data()[i * 3] =
+          nums_buffer_.cpu_data()[i] == 0 ? 0
+          : top[1]->cpu_data()[i * 3] / nums_buffer_.cpu_data()[i];
+    
     }
   }
   // Accuracy layer should not be used as a loss function.

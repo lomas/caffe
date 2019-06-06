@@ -1,0 +1,1 @@
+python classify.py  list.txt out.txt --raw_scale=255.0 --input_root=/home/data/ --model_def=deploy.prototxt --pretrained_model=weight.caffemodel --device=0 --images_dim=135,135 --mean_bgr=124,17,223 --batch_size=1024

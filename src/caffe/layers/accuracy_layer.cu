@@ -124,12 +124,16 @@ void AccuracyLayer<Dtype>::Forward_gpu(
     // get per-class accuracy
     Dtype* per_class_acc = top[1]->mutable_cpu_data();
     for (int l = 0; l < num_labels; l++) {
-      caffe_gpu_asum(nthreads, acc_data + l*nthreads, per_class_acc+l);
+      caffe_gpu_asum(nthreads, acc_data + l*nthreads, per_class_acc+l*3+1);
       caffe_gpu_asum(nthreads, counts + l*nthreads, &valid_count);
       if (valid_count > 0) {
-        per_class_acc[l] /= valid_count;
+        //per_class_acc[l] /= valid_count;
+        per_class_acc[l*3+2] = valid_count;
+        per_class_acc[l*3] = per_class_acc[l*3+1] / valid_count;
       } else {
-        per_class_acc[l] = 0;
+        //per_class_acc[l] = 0;
+        per_class_acc[l*3+2] = 0;
+        per_class_acc[l*3] = 0;
       }
     }
   }

@@ -4,6 +4,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <map>
 
 #include "caffe/blob.hpp"
 #include "caffe/data_transformer.hpp"
@@ -19,6 +20,8 @@ namespace caffe {
  *
  * TODO(dox): thorough documentation for Forward and proto params.
  */
+
+
 template <typename Dtype>
 class ImageDataLayer : public BasePrefetchingDataLayer<Dtype> {
  public:
@@ -30,7 +33,8 @@ class ImageDataLayer : public BasePrefetchingDataLayer<Dtype> {
 
   virtual inline const char* type() const { return "ImageData"; }
   virtual inline int ExactNumBottomBlobs() const { return 0; }
-  virtual inline int ExactNumTopBlobs() const { return 2; }
+  virtual inline int ExactNumTopBlobs() const { return -1; }
+  virtual inline int MaxTopBlobs() const { return 3; }
 
  protected:
   shared_ptr<Caffe::RNG> prefetch_rng_;
@@ -38,7 +42,9 @@ class ImageDataLayer : public BasePrefetchingDataLayer<Dtype> {
   virtual void load_batch(Batch<Dtype>* batch);
 
   vector<std::pair<std::string, int> > lines_;
+  map<std::string, Dtype> path2weight_;
   int lines_id_;
+  bool output_weights_;
 };
 
 

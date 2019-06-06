@@ -25,10 +25,19 @@ void BaseDataLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   } else {
     output_labels_ = true;
   }
+
+  if(top.size() <= 2){
+    output_weights_ = false;
+  } else {
+    output_weights_ = true;
+  }
+  //LOG(INFO)<<"base_image_layer:"<<top.size();
   data_transformer_.reset(
       new DataTransformer<Dtype>(transform_param_, this->phase_));
   data_transformer_->InitRand();
   // The subclasses should setup the size of bottom and top
+
+  //LOG(INFO)<<"layer setup before DataLayerSetup";
   DataLayerSetUp(bottom, top);
 }
 
@@ -58,6 +67,9 @@ void BasePrefetchingDataLayer<Dtype>::LayerSetUp(
     if (this->output_labels_) {
       prefetch_[i]->label_.mutable_cpu_data();
     }
+    if(this->output_weights_) {
+      prefetch_[i]->weight_.mutable_cpu_data();
+    }
   }
 #ifndef CPU_ONLY
   if (Caffe::mode() == Caffe::GPU) {
@@ -65,6 +77,9 @@ void BasePrefetchingDataLayer<Dtype>::LayerSetUp(
       prefetch_[i]->data_.mutable_gpu_data();
       if (this->output_labels_) {
         prefetch_[i]->label_.mutable_gpu_data();
+      }
+      if(this->output_weights_) {
+        prefetch_[i]->weight_.mutable_gpu_data();
       }
     }
   }
@@ -93,6 +108,9 @@ void BasePrefetchingDataLayer<Dtype>::InternalThreadEntry() {
         batch->data_.data().get()->async_gpu_push(stream);
         if (this->output_labels_) {
           batch->label_.data().get()->async_gpu_push(stream);
+        }
+        if(this->output_weights_){
+          batch->weight_.data().get()->async_gpu_push(stream);
         }
         CUDA_CHECK(cudaStreamSynchronize(stream));
       }
@@ -124,6 +142,17 @@ void BasePrefetchingDataLayer<Dtype>::Forward_cpu(
     top[1]->ReshapeLike(prefetch_current_->label_);
     top[1]->set_cpu_data(prefetch_current_->label_.mutable_cpu_data());
   }
+
+ // LOG(INFO)<<"base_image_layer_output_weights:"<<this->output_weights_;
+  if(this->output_weights_)
+  {
+    // Reshape to loaded weights
+    top[2]->ReshapeLike(prefetch_current_->weight_);
+    top[2]->set_cpu_data(prefetch_current_->weight_.mutable_cpu_data());
+
+  //  LOG(INFO)<<"base_image_layer_weight:"<<top[2]->cpu_data()[1];
+  }
+
 }
 
 #ifdef CPU_ONLY

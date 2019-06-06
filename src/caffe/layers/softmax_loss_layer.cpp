@@ -20,7 +20,36 @@ void SoftmaxWithLossLayer<Dtype>::LayerSetUp(
   softmax_top_vec_.push_back(&prob_);
   softmax_layer_->SetUp(softmax_bottom_vec_, softmax_top_vec_);
 
-  has_ignore_label_ =
+
+  softmax_axis_ =
+      bottom[0]->CanonicalAxisIndex(this->layer_param_.softmax_param().axis());
+  int class_weight_num = this->layer_param_.softmax_param().class_weight_size();
+  if(class_weight_num > 0)
+  {
+    std::vector<int> shape;
+    shape.push_back( bottom[0]->shape(softmax_axis_)  );
+    class_weights_.Reshape( shape);
+    CHECK_EQ(class_weight_num, bottom[0]->shape(softmax_axis_));
+    for(int k = 0; k < bottom[0]->shape(softmax_axis_); k++)
+    {
+      class_weights_.mutable_cpu_data()[k] = (Dtype)this->layer_param_.softmax_param().class_weight(k);
+    }
+  }
+  else
+  {
+    std::vector<int> shape;
+    shape.push_back( bottom[0]->shape(softmax_axis_)  );
+    class_weights_.Reshape( shape);
+
+    for(int k = 0; k < bottom[0]->shape(softmax_axis_); k++)
+    {
+      class_weights_.mutable_cpu_data()[k] = (Dtype)(1.0);
+    }
+  }
+
+  //LOG(INFO)<<"after class_weight:"<<bottom[0]->shape_string();
+  //LOG(INFO)<<"softmax_axis_:"<<softmax_axis_;
+  has_ignore_label_ = 
     this->layer_param_.loss_param().has_ignore_label();
   if (has_ignore_label_) {
     ignore_label_ = this->layer_param_.loss_param().ignore_label();
@@ -53,11 +82,13 @@ void SoftmaxWithLossLayer<Dtype>::Reshape(
     // softmax output
     top[1]->ReshapeLike(*bottom[0]);
   }
+
+  CHECK_EQ(class_weights_.count(), bottom[0]->shape(softmax_axis_));
 }
 
 template <typename Dtype>
 Dtype SoftmaxWithLossLayer<Dtype>::get_normalizer(
-    LossParameter_NormalizationMode normalization_mode, int valid_count) {
+    LossParameter_NormalizationMode normalization_mode, Dtype valid_count) {
   Dtype normalizer;
   switch (normalization_mode) {
     case LossParameter_NormalizationMode_FULL:
@@ -93,21 +124,45 @@ void SoftmaxWithLossLayer<Dtype>::Forward_cpu(
   const Dtype* prob_data = prob_.cpu_data();
   const Dtype* label = bottom[1]->cpu_data();
   int dim = prob_.count() / outer_num_;
-  int count = 0;
+  Dtype count = 0;
   Dtype loss = 0;
-  for (int i = 0; i < outer_num_; ++i) {
-    for (int j = 0; j < inner_num_; j++) {
-      const int label_value = static_cast<int>(label[i * inner_num_ + j]);
-      if (has_ignore_label_ && label_value == ignore_label_) {
-        continue;
+  if(bottom.size() == 2)
+  {
+    for (int i = 0; i < outer_num_; ++i) {
+      for (int j = 0; j < inner_num_; j++) {
+        const int label_value = static_cast<int>(label[i * inner_num_ + j]);
+        if (has_ignore_label_ && label_value == ignore_label_) {
+          continue;
+        }
+        DCHECK_GE(label_value, 0);
+        DCHECK_LT(label_value, prob_.shape(softmax_axis_));
+        const Dtype weight_value = class_weights_.cpu_data()[label_value];
+        loss -= weight_value * log(std::max(prob_data[i * dim + label_value * inner_num_ + j],
+                            Dtype(FLT_MIN)));
+        //++count;
+        count += weight_value;
       }
-      DCHECK_GE(label_value, 0);
-      DCHECK_LT(label_value, prob_.shape(softmax_axis_));
-      loss -= log(std::max(prob_data[i * dim + label_value * inner_num_ + j],
-                           Dtype(FLT_MIN)));
-      ++count;
     }
   }
+  else if(bottom.size() == 3) {
+    const Dtype* weights = bottom[2]->cpu_data();
+    for (int i = 0; i < outer_num_; ++i) {
+      for (int j = 0; j < inner_num_; j++) {
+        const int label_value = static_cast<int>(label[i * inner_num_ + j]);
+        const Dtype weight_value = weights[i * inner_num_ + j] * class_weights_.cpu_data()[label_value];
+        if (weight_value == 0) continue;
+        if (has_ignore_label_ && label_value == ignore_label_) {
+          continue;
+        }
+        DCHECK_GE(label_value, 0);
+        DCHECK_LT(label_value, prob_.shape(softmax_axis_));
+        loss -= weight_value * log(std::max(prob_data[i * dim + label_value * inner_num_ + j],
+          Dtype(FLT_MIN)));
+        count += weight_value;
+      }
+    }
+  }
+
   top[0]->mutable_cpu_data()[0] = loss / get_normalizer(normalization_, count);
   if (top.size() == 2) {
     top[1]->ShareData(prob_);
@@ -127,17 +182,47 @@ void SoftmaxWithLossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     caffe_copy(prob_.count(), prob_data, bottom_diff);
     const Dtype* label = bottom[1]->cpu_data();
     int dim = prob_.count() / outer_num_;
-    int count = 0;
-    for (int i = 0; i < outer_num_; ++i) {
-      for (int j = 0; j < inner_num_; ++j) {
-        const int label_value = static_cast<int>(label[i * inner_num_ + j]);
-        if (has_ignore_label_ && label_value == ignore_label_) {
-          for (int c = 0; c < bottom[0]->shape(softmax_axis_); ++c) {
-            bottom_diff[i * dim + c * inner_num_ + j] = 0;
+    Dtype count = 0;
+    if(bottom.size() == 2)
+    {
+      for (int i = 0; i < outer_num_; ++i) {
+        for (int j = 0; j < inner_num_; ++j) {
+          const int label_value = static_cast<int>(label[i * inner_num_ + j]);
+          if (has_ignore_label_ && label_value == ignore_label_) {
+            for (int c = 0; c < bottom[0]->shape(softmax_axis_); ++c) {
+              bottom_diff[i * dim + c * inner_num_ + j] = 0;
+            }
+          } else {
+            bottom_diff[i * dim + label_value * inner_num_ + j] -= 1;
+            Dtype weight_value = class_weights_.cpu_data()[label_value];
+            for (int c = 0; c < bottom[0]->shape(softmax_axis_); ++c) {
+              bottom_diff[i * dim + c * inner_num_ + j] *= weight_value;
+            }
+            //++count;
+            count += weight_value;
           }
-        } else {
-          bottom_diff[i * dim + label_value * inner_num_ + j] -= 1;
-          ++count;
+        }
+      }
+    }
+    else if (bottom.size() == 3) 
+    {
+      const Dtype* weights = bottom[2]->cpu_data();
+      for (int i = 0; i < outer_num_; ++i) {
+        for (int j = 0; j < inner_num_; ++j) {
+          const int label_value = static_cast<int>(label[i * inner_num_ + j]);
+          const Dtype weight_value = weights[i * inner_num_ + j] * class_weights_.cpu_data()[label_value];
+          if (has_ignore_label_ && label_value == ignore_label_) {
+            for (int c = 0; c < bottom[0]->shape(softmax_axis_); ++c) {
+              bottom_diff[i * dim + c * inner_num_ + j] = 0;
+            }
+          }
+          else {
+            bottom_diff[i * dim + label_value * inner_num_ + j] -= 1;
+            for (int c = 0; c < bottom[0]->shape(softmax_axis_); ++c) {
+              bottom_diff[i * dim + c * inner_num_ + j] *= weight_value;
+            }
+            if(weight_value != 0) count += weight_value;
+          }
         }
       }
     }

@@ -40,13 +40,67 @@ void ImageDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
   string line;
   size_t pos;
   int label;
-  while (std::getline(infile, line)) {
-    pos = line.find_last_of(' ');
-    label = atoi(line.substr(pos + 1).c_str());
-    lines_.push_back(std::make_pair(line.substr(0, pos), label));
+
+
+  if(top.size() == 2)
+  { //path label 
+    output_weights_ = false;
+    while (std::getline(infile, line)) {
+      pos = line.find_last_of(' ');
+      label = atoi(line.substr(pos + 1).c_str());
+      lines_.push_back(std::make_pair(line.substr(0, pos), label));
+    }
+#if 0
+    Dtype weight = (Dtype)(1.0);
+    for(int k = 0; k < lines_.size(); k++)
+    {
+      std::string path = lines_[k].first;
+      typename std::map<std::string, Dtype>::iterator iter = path2weight_.find(path);
+      if(iter == path2weight_.end())
+        path2weight_[path]= weight;
+      else
+      {
+        LOG(WARNING)<<"duplicated image found";
+        iter->second += weight;
+      }
+    }
+  #endif
+
+  }
+  else if (top.size() == 3)
+  { // path label weight
+      output_weights_ = true;
+
+      float weight;
+      while (std::getline(infile, line)) {
+      pos = line.find_last_of(' ');
+      weight = atof(line.substr(pos + 1).c_str());
+      line[pos] = '\0';
+
+      pos = line.find_last_of(' ');
+      label = atoi(line.substr(pos + 1).c_str());
+
+      std::string path = line.substr(0, pos);
+      lines_.push_back(  std::make_pair(path, label));
+
+      typename std::map<std::string, Dtype>::iterator iter = path2weight_.find(path);
+      if(iter == path2weight_.end())
+        path2weight_[path]= weight;
+      else
+      {
+        LOG(WARNING)<<"duplicated image found";
+        iter->second += weight;
+      }
+    }
+    CHECK(lines_.size() == path2weight_.size())<<"different count between file and weight";
+  }
+  else
+  {
+    LOG(FATAL)<<"only 2 (data,label) or 3 (data,label,weight) top blob supported";
   }
 
   CHECK(!lines_.empty()) << "File is empty";
+
 
   if (this->layer_param_.image_data_param().shuffle()) {
     // randomly shuffle data
@@ -96,6 +150,14 @@ void ImageDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
   for (int i = 0; i < this->prefetch_.size(); ++i) {
     this->prefetch_[i]->label_.Reshape(label_shape);
   }
+
+  if(top.size() == 3)
+  {
+    top[2]->Reshape(label_shape);
+    for (int i = 0; i < this->prefetch_.size(); ++i) {
+      this->prefetch_[i]->weight_.Reshape(label_shape);
+    }
+  }
 }
 
 template <typename Dtype>
@@ -134,8 +196,14 @@ void ImageDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
   top_shape[0] = batch_size;
   batch->data_.Reshape(top_shape);
 
-  Dtype* prefetch_data = batch->data_.mutable_cpu_data();
+ // LOG(INFO)<<"batch->data_.shape:"<<batch->data_.shape_string();
+  //LOG(INFO)<<"batch->weight_.shape:"<<batch->weight_.shape_string();
+
   Dtype* prefetch_label = batch->label_.mutable_cpu_data();
+  Dtype* prefetch_data = batch->data_.mutable_cpu_data();
+  Dtype* prefetch_weight;
+  if(this->output_weights_)
+    prefetch_weight = batch->weight_.mutable_cpu_data();
 
   // datum scales
   const int lines_size = lines_.size();
@@ -155,6 +223,12 @@ void ImageDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
     trans_time += timer.MicroSeconds();
 
     prefetch_label[item_id] = lines_[lines_id_].second;
+    if(this->output_weights_)
+    {
+      prefetch_weight[item_id] = path2weight_[ lines_[lines_id_].first ];
+      //LOG(INFO)<<"prefetch weight: "<<prefetch_weight[item_id];
+    }
+
     // go to the next iter
     lines_id_++;
     if (lines_id_ >= lines_size) {

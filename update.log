@@ -1,0 +1,109 @@
+* 支持warmup
+  warmup_iter: 10000
+
+
+
+* SoftmaxWithLoss layer支持类别权重
+  ***
+      layer {
+      name: "loss"
+      type: "SoftmaxWithLoss"
+      bottom: "fc"
+      bottom: "label"
+      bottom: "weight"
+      top: "loss"
+      softmax_param{
+        class_weight: 1
+        class_weight: 1
+        class_weight: 1
+        class_weight: 1
+        class_weight: 1
+        class_weight: 1
+        class_weight: 1
+        class_weight: 1
+        class_weight: 5 
+        class_weight: 1
+      }
+    }
+    
+* ImageData layer支持样本权重
+  样本权重和类别权重是相乘的关系
+  train.txt和test.txt中需要增加一列(空格分割)
+  path label weight
+  ***
+      layer {
+      name: "cifar"
+      type: "ImageData"
+      top: "data"
+      top: "label"
+      top: "weight"
+      include {
+        phase: TRAIN
+      }
+      transform_param {
+          mirror:true
+          crop_size : 28
+          scale:0.0039
+      }
+      image_data_param  {
+        source: "train.txt"
+        batch_size: 100
+        shuffle: true
+      }
+    }
+
+* CenterLoss (https://github.com/ydwen/centerloss)
+    layer {
+         name: "generalized_center_loss"
+         type: "CenterLoss"
+         bottom: "fc5"
+         bottom: "label"
+         top: "center_loss"
+         top: "count"
+         param {
+             lr_mult: 1
+             decay_mult: 1
+         }
+         center_loss_param {
+             num_output: 7994
+             margin:5 ##radius##
+             center_filler {
+               type: "xavier"
+             }
+         }
+         loss_weight: 0.01
+         loss_weight: 0.0
+     }
+
+* SharedCenterLoss
+   layer {
+         name: "advanced_center_loss"
+         type: "SharedCenterLoss"
+         bottom: "fc5"
+         bottom: "label"
+         top: "shared_center_loss"
+         top: "count"
+         param {
+           name:"center"
+           lr_mult: 1
+           decay_mult: 1
+         }
+         param {
+           lr_mult: 1
+           decay_mult: 0
+         }
+         shared_center_loss_param {
+           num_output: 7994
+           margin:5 ##radius##
+           gamma_shared: True ##share weights##
+           center_filler {
+             type: "xavier"
+           }
+           gamma_filler{
+             type:"constant"
+             value:1
+           }
+         }
+         loss_weight: 0.01
+         loss_weight: 0.0
+       }
