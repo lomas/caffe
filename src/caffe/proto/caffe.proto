@@ -562,8 +562,8 @@ message LossParameter {
   // normalization = BATCH_SIZE to be consistent with previous behavior.
   optional bool normalize = 2;
 
-  optional float label_smooth = 4;
-  optional bool use_label_smooth = 5;
+  optional float label_smooth = 4 [default = 0];
+  optional bool use_label_smooth = 5 [default = false];
 }
 
 // Messages that store parameters used by individual layer types follow, in
