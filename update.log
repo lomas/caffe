@@ -107,3 +107,17 @@
          loss_weight: 0.01
          loss_weight: 0.0
        }
+       
+       
+* LabelSmooth
+layer {
+  name: "loss"
+  type: "SoftmaxWithLoss"
+  bottom: "dense"
+  bottom: "label"
+  top: "loss"
+  loss_param {
+  use_label_smooth: true
+  label_smooth: 0.1  
+  }
+}       
