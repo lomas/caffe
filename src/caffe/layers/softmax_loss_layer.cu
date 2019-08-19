@@ -139,9 +139,7 @@ __global__ void SoftmaxLossBackwardGPU(const int nthreads, const Dtype* top,
       }
       else
       {
-        bottom_diff[n * dim + label_value * spatial_dim + s] -= 1;
-        //for(int c = 0; c < channels; c++)
-        //  bottom_diff[n * dim + c * spatial_dim + s] -= weight_value;
+        bottom_diff[n * dim + label_value * spatial_dim + s] -= weight_value;
         counts[index] = 1;
       }
     }
