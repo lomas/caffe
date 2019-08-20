@@ -39,9 +39,11 @@ class ImageDataLayer : public BasePrefetchingDataLayer<Dtype> {
  protected:
   shared_ptr<Caffe::RNG> prefetch_rng_;
   virtual void ShuffleImages();
+  virtual void label_shuffling();
   virtual void load_batch(Batch<Dtype>* batch);
 
   vector<std::pair<std::string, int> > lines_;
+  vector<std::pair<std::string, int> > lines_org_; //original lines used for some tricks like label-shuffling
   map<std::string, Dtype> path2weight_;
   int lines_id_;
   bool output_weights_;

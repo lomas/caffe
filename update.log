@@ -121,3 +121,23 @@ layer {
   label_smooth: 0.1  
   }
 }       
+
+* label shuffle
+
+layer {
+  name: "data"
+  type: "ImageData"
+  include {
+    phase: TRAIN
+  }
+ image_data_param {
+    source: "train.txt"
+    root_folder: "data/"
+    batch_size: 32
+    is_color: true
+    #shuffle: true
+    label_shuffle: true
+  }
+  top: "data"
+  top: "label"
+}

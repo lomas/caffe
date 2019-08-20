@@ -17,6 +17,8 @@
 
 namespace caffe {
 
+
+
 template <typename Dtype>
 ImageDataLayer<Dtype>::~ImageDataLayer<Dtype>() {
   this->StopInternalThread();
@@ -100,6 +102,12 @@ void ImageDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
   }
 
   CHECK(!lines_.empty()) << "File is empty";
+  
+  lines_org_.clear();
+  for(int k = 0; k < lines_.size(); k++)
+  {
+    lines_org_.push_back(lines_[k]);
+  }
 
 
   if (this->layer_param_.image_data_param().shuffle()) {
@@ -108,7 +116,13 @@ void ImageDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
     const unsigned int prefetch_rng_seed = caffe_rng_rand();
     prefetch_rng_.reset(new Caffe::RNG(prefetch_rng_seed));
     ShuffleImages();
-  } else {
+  } 
+  if( this->layer_param_.image_data_param().label_shuffle() ) 
+  {
+   label_shuffling();
+  }
+  else 
+  {
     if (this->phase_ == TRAIN && Caffe::solver_rank() > 0 &&
         this->layer_param_.image_data_param().rand_skip() == 0) {
       LOG(WARNING) << "Shuffling or skipping recommended for multi-GPU";
@@ -161,10 +175,72 @@ void ImageDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
 }
 
 template <typename Dtype>
-void ImageDataLayer<Dtype>::ShuffleImages() {
+void ImageDataLayer<Dtype>::ShuffleImages() 
+{
+
   caffe::rng_t* prefetch_rng =
       static_cast<caffe::rng_t*>(prefetch_rng_->generator());
   shuffle(lines_.begin(), lines_.end(), prefetch_rng);
+}
+
+
+
+template <typename Dtype>
+void ImageDataLayer<Dtype>::label_shuffling() 
+{
+  const unsigned int prefetch_rng_seed = caffe_rng_rand();
+  prefetch_rng_.reset(new Caffe::RNG(prefetch_rng_seed));
+
+  lines_.clear();
+  std::map< int, std::vector<int> > labels_count;
+  for(int k = 0; k < lines_org_.size(); k++)
+  {
+    int label = lines_org_[k].second;
+    std::map<int,std::vector<int> >::iterator iter = labels_count.find(label);
+    if(iter == labels_count.end())
+    {
+      labels_count[label].clear();
+      labels_count[label].push_back(k);
+    }
+    else
+    {
+      labels_count[label].push_back(k);
+    }
+  }
+
+  int max_num = 0;
+  for(int k = 0; k < labels_count.size(); k++)
+  {
+    if(max_num < labels_count[k].size())
+      max_num = labels_count[k].size();
+  }
+
+
+  int total_req = max_num;
+  float* inds = new float[total_req];
+  for(int k = 0; k < labels_count.size(); k++)
+  {
+    //LOG(INFO)<<"label_shuffle for class:"<<k <<" "<<total_req;
+    caffe_rng_uniform(total_req, 0.0f, (INT_MAX - 1) * 1.0f, inds);
+    for(int j = 0; j < total_req; j++)
+    {
+      int tmp = (int) inds[j];
+      int ind = labels_count[k][  tmp % labels_count[k].size()  ];
+      //LOG(INFO)<<"label_shuffle: "<<k<<","<<tmp<<","<<labels_count[k].size() <<","<<ind << "/" << lines_org_.size() <<"," << lines_.size();
+      //LOG(INFO)<<"\t"<<lines_org_[ind].first<<","<<lines_org_[ind].second;
+      lines_.push_back( lines_org_[ind]   );
+      if(lines_org_[ind].second != k)
+      {
+        LOG(INFO)<<"label shuffle error: "<< k <<" -> " << lines_org_[ind].second ;
+      }
+    }
+
+  }
+  delete[] inds;
+
+  //LOG(INFO)<<"label shuffle result: "<< lines_.size();
+  ShuffleImages();
+  return;
 }
 
 // This function is called on prefetch thread
@@ -238,6 +314,12 @@ void ImageDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
       if (this->layer_param_.image_data_param().shuffle()) {
         ShuffleImages();
       }
+
+      if(this->layer_param_.image_data_param().label_shuffle() ) 
+      {
+        label_shuffling();
+      }
+
     }
   }
   batch_timer.Stop();
