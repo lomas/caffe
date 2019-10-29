@@ -30,7 +30,7 @@ Dtype SGDSolver<Dtype>::GetLearningRate() {
   int warmup_iter = this->param_.warmup_iter();
   if(warmup_iter > 0 && this->iter_ < warmup_iter)
   {
-    Dtype warmup_factor = 0.1; //////
+    Dtype warmup_factor = 0.01; //////
     Dtype alpha = Dtype(this->iter_) / (Dtype)warmup_iter;
     Dtype factor = (1-alpha) * warmup_factor + alpha;
     rate = factor * this->param_.base_lr();
