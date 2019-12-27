@@ -268,6 +268,7 @@ void DataTransformer<Dtype>::Transform(const cv::Mat& cv_img,
 
   const Dtype scale = param_.scale();
   const bool do_mirror = param_.mirror() && Rand(2);
+  const bool do_topdown = param_.topdown() && Rand(2);
   const bool has_mean_file = param_.has_mean_file();
   const bool has_mean_values = mean_values_.size() > 0;
 
@@ -332,6 +333,13 @@ void DataTransformer<Dtype>::Transform(const cv::Mat& cv_img,
   }
 
   CHECK(cv_cropped_img.data);
+
+  if(do_topdown) {
+      //LOG(INFO)<<"topdown-----------";
+      ///cv::imwrite("topdown-in.bmp",cv_cropped_img);
+      cv::flip(cv_cropped_img, cv_cropped_img,0);
+      //cv::imwrite("topdown-out.bmp",cv_cropped_img);
+  }
 
   Dtype* transformed_data = transformed_blob->mutable_cpu_data();
   int top_index;

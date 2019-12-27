@@ -141,3 +141,30 @@ layer {
   top: "data"
   top: "label"
 }
+
+
+
+* top-down augment
+layer {
+  name: "data"
+  type: "ImageData"
+  top: "data"
+  top: "label"
+  include {
+    phase: TRAIN
+  }
+  transform_param {
+    mirror: true
+    topdown: true
+    mean_value: 104
+    mean_value: 117
+    mean_value: 123
+  }
+  image_data_param {
+    source: "../../data/pengmao_train.txt"
+    root_folder: "../../data/"
+    is_color: true
+    batch_size: 32
+    label_shuffle: true
+  }
+}

@@ -532,6 +532,7 @@ message TransformationParameter {
   optional uint32 crop_w = 8 [default = 0];
   optional uint32 crop_h = 9 [default = 0];
   optional bool center_crop = 10 [default = false];
+  optional bool topdown = 11 [default = false];
 }
 
 // Message that stores parameters shared by loss layers
