@@ -42,8 +42,8 @@ class ImageDataLayer : public BasePrefetchingDataLayer<Dtype> {
   virtual void label_shuffling();
   virtual void load_batch(Batch<Dtype>* batch);
 
-  vector<std::pair<std::string, int> > lines_;
-  vector<std::pair<std::string, int> > lines_org_; //original lines used for some tricks like label-shuffling
+  vector<std::pair<std::string, std::vector<int> > > lines_;
+  vector<std::pair<std::string, std::vector<int> > > lines_org_; //original lines used for some tricks like label-shuffling
   map<std::string, Dtype> path2weight_;
   int lines_id_;
   bool output_weights_;

@@ -1,3 +1,43 @@
+* 支持多标签分类、回归(需要配合slice层,每个label单独对应一个loss)
+  ***
+  trainval.txt
+  001.jpg 1 3 2 5
+  002.jpg 2 6 7 2
+  003.jpg 4 10 9 8
+  ***
+
+  ***
+  #trainval.prototxt
+  layer {
+    name: "input"
+    type:"ImageData"
+    top:"data"
+    top:"label"
+    image_data_param{
+      source:"trainval.txt"
+      shuffle:true
+      label_num: 4 #multiple-labeling
+      label_scale: 0.1 #regression
+    }
+  }
+  layer{
+    name:"slice_input"
+    type:"Slice"
+    bottom:"label"
+    top:"label_1"
+    top:"label_2"
+    top:"label_3"
+    top:"label_4"
+    slice_param {
+      axis: 1 # (batchsize, label_num)
+      slice_point:1
+      slice_point:2
+      slice_point:3
+      slice_point:4
+    }
+  }
+  ***
+
 * 支持warmup
   warmup_iter: 10000
 

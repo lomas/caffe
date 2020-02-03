@@ -925,6 +925,10 @@ message ImageDataParameter {
   optional bool mirror = 6 [default = false];
   optional string root_folder = 12 [default = ""];
   optional bool label_shuffle = 13 [default = false]; //label shuffle following hikvision 
+
+  optional uint32 label_num = 14 [default = 1]; //for multiple label task
+  optional float label_scale = 15 [default = -1]; //for regression if not negative will be multiplied on labels
+  optional float label_mean = 16 [default = 0]; //for regression if label_scale is positive 
 }
 
 message InfogainLossParameter {

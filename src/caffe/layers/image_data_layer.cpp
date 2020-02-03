@@ -30,6 +30,7 @@ void ImageDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
   const int new_height = this->layer_param_.image_data_param().new_height();
   const int new_width  = this->layer_param_.image_data_param().new_width();
   const bool is_color  = this->layer_param_.image_data_param().is_color();
+  const int label_num = this->layer_param_.image_data_param().label_num();
   string root_folder = this->layer_param_.image_data_param().root_folder();
 
   CHECK((new_height == 0 && new_width == 0) ||
@@ -47,11 +48,23 @@ void ImageDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
   if(top.size() == 2)
   { //path label 
     output_weights_ = false;
+    std::string filepath;
+    while(infile >> filepath) {
+      std::vector<int> labels;
+      labels.resize(label_num);
+      for(int k = 0; k <label_num; k++)
+      {
+        infile >> labels[k];
+      }
+      lines_.push_back(std::make_pair(filepath,labels));
+    }
+#if 0
     while (std::getline(infile, line)) {
       pos = line.find_last_of(' ');
       label = atoi(line.substr(pos + 1).c_str());
       lines_.push_back(std::make_pair(line.substr(0, pos), label));
     }
+#endif
 #if 0
     Dtype weight = (Dtype)(1.0);
     for(int k = 0; k < lines_.size(); k++)
@@ -159,10 +172,21 @@ void ImageDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
       << top[0]->channels() << "," << top[0]->height() << ","
       << top[0]->width();
   // label
+  #if 0
   vector<int> label_shape(1, batch_size);
   top[1]->Reshape(label_shape);
   for (int i = 0; i < this->prefetch_.size(); ++i) {
     this->prefetch_[i]->label_.Reshape(label_shape);
+  }
+  #endif
+
+  vector<int> label_shape(2);
+  label_shape[0] = batch_size;
+  label_shape[1] = label_num;
+  top[1]->Reshape(label_shape);
+  for(int k = 0; k <this->prefetch_.size(); k++)
+  {
+    this->prefetch_[k]->label_.Reshape(label_shape);
   }
 
   if(top.size() == 3)
@@ -188,6 +212,14 @@ void ImageDataLayer<Dtype>::ShuffleImages()
 template <typename Dtype>
 void ImageDataLayer<Dtype>::label_shuffling() 
 {
+
+  const int label_num = this->layer_param_.image_data_param().label_num();
+  if(label_num != 1)
+  {
+      LOG(INFO) << "label shuffle will be disabled for multiple labels task " ;
+      return;
+  }
+
   const unsigned int prefetch_rng_seed = caffe_rng_rand();
   prefetch_rng_.reset(new Caffe::RNG(prefetch_rng_seed));
 
@@ -195,7 +227,7 @@ void ImageDataLayer<Dtype>::label_shuffling()
   std::map< int, std::vector<int> > labels_count;
   for(int k = 0; k < lines_org_.size(); k++)
   {
-    int label = lines_org_[k].second;
+    int label = lines_org_[k].second[0];
     std::map<int,std::vector<int> >::iterator iter = labels_count.find(label);
     if(iter == labels_count.end())
     {
@@ -229,9 +261,9 @@ void ImageDataLayer<Dtype>::label_shuffling()
       //LOG(INFO)<<"label_shuffle: "<<k<<","<<tmp<<","<<labels_count[k].size() <<","<<ind << "/" << lines_org_.size() <<"," << lines_.size();
       //LOG(INFO)<<"\t"<<lines_org_[ind].first<<","<<lines_org_[ind].second;
       lines_.push_back( lines_org_[ind]   );
-      if(lines_org_[ind].second != k)
+      if(lines_org_[ind].second[0] != k)
       {
-        LOG(INFO)<<"label shuffle error: "<< k <<" -> " << lines_org_[ind].second ;
+        LOG(INFO)<<"label shuffle error: "<< k <<" -> " << lines_org_[ind].second[0] ;
       }
     }
 
@@ -258,6 +290,11 @@ void ImageDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
   const int new_height = image_data_param.new_height();
   const int new_width = image_data_param.new_width();
   const bool is_color = image_data_param.is_color();
+  const int label_num = image_data_param.label_num();
+  const float label_scale = image_data_param.label_scale();
+  float label_mean = image_data_param.label_mean();
+  if(label_mean < 0) label_mean = 0;
+ 
   string root_folder = image_data_param.root_folder();
 
   // Reshape according to the first image of each batch
@@ -298,7 +335,25 @@ void ImageDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
     this->data_transformer_->Transform(cv_img, &(this->transformed_data_));
     trans_time += timer.MicroSeconds();
 
+#if 0
     prefetch_label[item_id] = lines_[lines_id_].second;
+#endif
+
+
+    if( label_scale > 0 )
+    {
+      for(int k = 0; k <label_num; k++) 
+      {
+        prefetch_label[item_id * label_num + k] = (lines_[lines_id_].second[k] - label_mean)* label_scale;
+      }
+    }
+    else
+    {
+      for(int k = 0; k <label_num; k++) 
+      {
+        prefetch_label[item_id * label_num + k] = lines_[lines_id_].second[k];
+      }
+    }
     if(this->output_weights_)
     {
       prefetch_weight[item_id] = path2weight_[ lines_[lines_id_].first ];
